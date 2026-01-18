@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from mutagen.id3 import ID3, APIC, SYLT, TIT2, TPE1, TALB, Encoding
+from mutagen.id3 import ID3, APIC, SYLT, USLT, TIT2, TPE1, TALB, Encoding
 from mutagen.mp3 import MP3
 
 
@@ -132,9 +132,20 @@ def embed_lyric(
     if album:
         tags.add(TALB(encoding=Encoding.UTF8, text=album))
 
+    # Read raw LRC content for USLT (unsynchronized lyrics)
+    with open(lyric_path, "r", encoding="utf-8") as f:
+        lrc_content = f.read()
+
+    # Add unsynchronized lyrics (USLT) - better player compatibility
+    if lrc_content:
+        tags.delall("USLT")
+        tags.add(USLT(encoding=Encoding.UTF8, lang="zho", desc="", text=lrc_content))
+
     # Add synchronized lyrics (SYLT)
     lyrics = parse_lrc(str(lyric_path))
     if lyrics:
+        # Remove any existing SYLT tags first
+        tags.delall("SYLT")
         sylt = SYLT(
             encoding=Encoding.UTF8,
             lang="zho",
@@ -142,7 +153,7 @@ def embed_lyric(
             type=1,    # lyrics
             text=lyrics,
         )
-        tags.add(sylt)
+        tags.setall("SYLT", [sylt])
 
     # Add cover art if provided
     if cover_path and Path(cover_path).exists():
@@ -164,5 +175,5 @@ def embed_lyric(
             )
         )
 
-    audio.save()
+    audio.save(v2_version=4)
     return True
