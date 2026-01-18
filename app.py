@@ -18,6 +18,7 @@ from models import (
 )
 from task_manager import task_manager, FileTask
 from transcriber import get_available_models
+from audio_merger import AudioMerger
 
 app = FastAPI(title="Lyric Transcribe")
 
@@ -26,6 +27,19 @@ CONFIG_PATH = Path(__file__).parent / "config.json"
 
 # Supported audio extensions
 AUDIO_EXTENSIONS = {".m4a", ".mp3", ".mp4", ".wav", ".flac", ".ogg", ".aac"}
+
+# Audio merger instance
+audio_merger = AudioMerger()
+merge_progress_queue = None
+
+
+# Merge request model
+class MergeRequest(BaseModel):
+    """Request model for audio merge."""
+    files: list[str]
+    output_name: str
+    delete_sources: bool = False
+    overwrite: bool = False
 
 
 def load_config() -> Config:
@@ -184,11 +198,18 @@ async def get_files() -> list[FileInfo]:
             output_path = output_dir / f"{stem}.mp3"
             has_output = output_path.exists()
 
+        # Get file size
+        try:
+            size_bytes = file_path.stat().st_size
+        except Exception:
+            size_bytes = 0
+
         files.append(FileInfo(
             name=file_path.name,
             has_lyric=has_lyric,
             has_output=has_output,
             status=FileStatus.COMPLETED if (has_lyric and has_output) else FileStatus.PENDING,
+            size_bytes=size_bytes,
         ))
 
     return files
@@ -267,6 +288,145 @@ async def task_stream():
                     yield ": keepalive\n\n"
         finally:
             task_manager.unsubscribe(queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/api/audio/check-exists")
+async def check_file_exists(filename: str) -> dict:
+    """Check if a file exists in the merge output directory."""
+    config = load_config()
+    
+    if not config.merge_output_dir:
+        return {"exists": False}
+    
+    output_path = Path(config.merge_output_dir) / filename
+    return {"exists": output_path.exists()}
+
+
+@app.post("/api/audio/merge")
+async def merge_audio(request: MergeRequest) -> dict:
+    """Start audio merge task."""
+    config = load_config()
+
+    if not config.merge_source_dir:
+        raise HTTPException(status_code=400, detail="Merge source directory not configured")
+    if not config.merge_output_dir:
+        raise HTTPException(status_code=400, detail="Merge output directory not configured")
+
+    source_dir = Path(config.merge_source_dir)
+    output_dir = Path(config.merge_output_dir)
+
+    # Ensure output directory exists
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build source file paths
+    source_files = []
+    for filename in request.files:
+        source_path = source_dir / filename
+        if not source_path.exists():
+            raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+        source_files.append(source_path)
+
+    if len(source_files) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 files required for merging")
+
+    # Ensure WAV extension
+    output_name = request.output_name
+    if not output_name.endswith('.wav'):
+        output_name = f"{output_name}.wav"
+
+    output_path = output_dir / output_name
+
+    # Check if file exists and not overwrite
+    if output_path.exists() and not request.overwrite:
+        raise HTTPException(status_code=409, detail=f"File already exists: {output_name}")
+
+    # Start merge in background
+    global merge_progress_queue
+    merge_progress_queue = asyncio.Queue()
+
+    async def run_merge():
+        """Run merge operation."""
+        try:
+            # Send start event
+            await merge_progress_queue.put({
+                'type': 'merge_start',
+                'data': {'file_count': len(source_files)}
+            })
+
+            # Progress callback
+            async def progress_callback(progress_data):
+                await merge_progress_queue.put({
+                    'type': 'merge_progress',
+                    'data': progress_data
+                })
+
+            # Run merge
+            success = await audio_merger.merge_audio_files(
+                source_files,
+                output_path,
+                progress_callback=lambda data: asyncio.create_task(progress_callback(data))
+            )
+
+            if success:
+                # Delete source files if requested
+                if request.delete_sources:
+                    await audio_merger.delete_source_files(source_files)
+
+                await merge_progress_queue.put({
+                    'type': 'merge_complete',
+                    'data': {'output_file': output_name}
+                })
+            else:
+                await merge_progress_queue.put({
+                    'type': 'merge_error',
+                    'data': {'message': 'Merge failed'}
+                })
+
+        except Exception as e:
+            await merge_progress_queue.put({
+                'type': 'merge_error',
+                'data': {'message': str(e)}
+            })
+
+    # Start merge task
+    asyncio.create_task(run_merge())
+
+    return {"success": True, "message": "Merge started"}
+
+
+@app.get("/api/audio/merge/stream")
+async def merge_stream():
+    """SSE endpoint for merge progress."""
+    async def event_generator():
+        global merge_progress_queue
+        
+        if merge_progress_queue is None:
+            merge_progress_queue = asyncio.Queue()
+        
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(merge_progress_queue.get(), timeout=30.0)
+                    yield f"event: {event['type']}\ndata: {json.dumps(event['data'])}\n\n"
+
+                    # Stop streaming if merge is complete
+                    if event['type'] in ['merge_complete', 'merge_error']:
+                        break
+                except asyncio.TimeoutError:
+                    # Send keepalive
+                    yield ": keepalive\n\n"
+        except Exception as e:
+            print(f"Stream error: {e}")
 
     return StreamingResponse(
         event_generator(),

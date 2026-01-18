@@ -5,973 +5,259 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lyric Transcribe</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
-            color: #333;
-            line-height: 1.6;
-        }
-
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        h1 {
-            text-align: center;
-            margin-bottom: 20px;
-            color: #2c3e50;
-        }
-
-        .section {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .section-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #2c3e50;
-        }
-
-        .form-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .form-group.full-width {
-            grid-column: 1 / -1;
-        }
-
-        .form-group label {
-            font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 5px;
-            color: #555;
-        }
-
-        .form-group input,
-        .form-group select {
-            padding: 10px 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-            transition: border-color 0.2s;
-        }
-
-        .form-group input:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: #3498db;
-        }
-
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .btn-primary {
-            background: #3498db;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #2980b9;
-        }
-
-        .btn-secondary {
-            background: #95a5a6;
-            color: white;
-        }
-
-        .btn-secondary:hover {
-            background: #7f8c8d;
-        }
-
-        .btn-success {
-            background: #27ae60;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #219a52;
-        }
-
-        .btn-danger {
-            background: #e74c3c;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #c0392b;
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-        }
-
-        .file-list {
-            max-height: 300px;
-            overflow-y: auto;
-            border: 1px solid #eee;
-            border-radius: 6px;
-        }
-
-        .file-item {
-            display: flex;
-            align-items: center;
-            padding: 12px 15px;
-            border-bottom: 1px solid #eee;
-            transition: background 0.2s;
-        }
-
-        .file-item:last-child {
-            border-bottom: none;
-        }
-
-        .file-item:hover {
-            background: #f8f9fa;
-        }
-
-        .file-item input[type="checkbox"] {
-            margin-right: 12px;
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-        }
-
-        .file-name {
-            flex: 1;
-            font-size: 14px;
-        }
-
-        .file-tags {
-            display: flex;
-            gap: 8px;
-        }
-
-        .tag {
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-
-        .tag-warning {
-            background: #fff3cd;
-            color: #856404;
-        }
-
-        .tag-success {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .tag-completed {
-            color: #27ae60;
-            font-size: 16px;
-        }
-
-        .progress-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .progress-text {
-            font-size: 14px;
-            color: #666;
-        }
-
-        .progress-bar-container {
-            height: 8px;
-            background: #eee;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-bottom: 15px;
-        }
-
-        .progress-bar {
-            height: 100%;
-            background: #3498db;
-            transition: width 0.3s;
-        }
-
-        .output-log {
-            background: #1e1e1e;
-            color: #d4d4d4;
-            border-radius: 6px;
-            padding: 15px;
-            max-height: 300px;
-            overflow-y: auto;
-            font-family: 'Monaco', 'Menlo', monospace;
-            font-size: 13px;
-            line-height: 1.5;
-        }
-
-        .output-log .line {
-            margin-bottom: 2px;
-        }
-
-        .output-log .time {
-            color: #569cd6;
-        }
-
-        .output-log .text {
-            color: #ce9178;
-        }
-
-        .output-log .info {
-            color: #6a9955;
-        }
-
-        .output-log .error {
-            color: #f44747;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: #999;
-        }
-
-        .selection-actions {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .selection-actions span {
-            font-size: 14px;
-            color: #666;
-        }
-
-        .btn-link {
-            background: none;
-            border: none;
-            color: #3498db;
-            cursor: pointer;
-            font-size: 14px;
-            padding: 0;
-        }
-
-        .btn-link:hover {
-            text-decoration: underline;
-        }
-
-        #progressSection {
-            display: none;
-        }
-
-        #progressSection.active {
-            display: block;
-        }
-
-        .elapsed-time {
-            font-size: 14px;
-            color: #666;
-            margin-left: 15px;
-        }
-
-        .autocomplete-wrapper {
-            position: relative;
-            width: 100%;
-        }
-
-        .autocomplete-wrapper input {
-            width: 100%;
-        }
-
-        .autocomplete-dropdown {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: white;
-            border: 1px solid #ddd;
-            border-top: none;
-            border-radius: 0 0 6px 6px;
-            max-height: 300px;
-            overflow-y: auto;
-            z-index: 1000;
-            display: none;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        .autocomplete-dropdown.active {
-            display: block;
-        }
-
-        .autocomplete-item {
-            padding: 10px 12px;
-            cursor: pointer;
-            font-size: 14px;
-            border-bottom: 1px solid #f0f0f0;
-            transition: background 0.2s;
-        }
-
-        .autocomplete-item:last-child {
-            border-bottom: none;
-        }
-
-        .autocomplete-item:hover,
-        .autocomplete-item.selected {
-            background: #f8f9fa;
-        }
-
-        .autocomplete-item.highlighted {
-            background: #e3f2fd;
-        }
-
-        .autocomplete-empty {
-            padding: 10px 12px;
-            color: #999;
-            font-size: 14px;
-            text-align: center;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 
 <body>
     <div class="container">
         <h1>Lyric Transcribe</h1>
 
-        <!-- Configuration Section -->
-        <div class="section">
-            <div class="section-header">
-                <span class="section-title">配置</span>
-            </div>
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>源音频目录</label>
-                    <div class="autocomplete-wrapper">
-                        <input type="text" id="sourceDir" placeholder="/path/to/source">
-                        <div class="autocomplete-dropdown" id="sourceDirAutocomplete"></div>
+        <!-- Tab Navigation -->
+        <div class="tabs">
+            <button class="tab active" data-tab="merge" onclick="switchTab('merge')">音频合并</button>
+            <button class="tab" data-tab="transcribe" onclick="switchTab('transcribe')">音频转录</button>
+        </div>
+
+        <!-- Merge Tab -->
+        <div id="mergeTab" class="tab-content active">
+            <!-- Merge Configuration -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-title">合并配置</span>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>源音频目录</label>
+                        <div class="autocomplete-wrapper">
+                            <input type="text" id="mergeSourceDir" placeholder="/path/to/source">
+                            <div class="autocomplete-dropdown" id="mergeSourceDirAutocomplete"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>输出目录</label>
+                        <div class="autocomplete-wrapper">
+                            <input type="text" id="mergeOutputDir" placeholder="/path/to/output">
+                            <div class="autocomplete-dropdown" id="mergeOutputDirAutocomplete"></div>
+                        </div>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label>歌词目录</label>
-                    <div class="autocomplete-wrapper">
-                        <input type="text" id="lyricDir" placeholder="/path/to/lyrics">
-                        <div class="autocomplete-dropdown" id="lyricDirAutocomplete"></div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>输出目录</label>
-                    <div class="autocomplete-wrapper">
-                        <input type="text" id="outputDir" placeholder="/path/to/output">
-                        <div class="autocomplete-dropdown" id="outputDirAutocomplete"></div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>封面图片路径</label>
-                    <div class="autocomplete-wrapper">
-                        <input type="text" id="coverPath" placeholder="/path/to/cover.jpg">
-                        <div class="autocomplete-dropdown" id="coverPathAutocomplete"></div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>模型</label>
-                    <select id="model"></select>
-                </div>
-                <div class="form-group">
-                    <label>语言</label>
-                    <input type="text" id="language" value="zh">
-                </div>
-                <div class="form-group">
-                    <label>歌手名</label>
-                    <input type="text" id="singerName" placeholder="Artist Name">
-                </div>
-                <div class="form-group">
-                    <label>专辑名</label>
-                    <input type="text" id="albumName" placeholder="Album Name">
-                </div>
-                <div class="form-group full-width">
-                    <label>Prompt</label>
-                    <input type="text" id="prompt" value="歌词 简体中文" placeholder="Transcription prompt">
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="saveMergeConfig()">保存配置</button>
                 </div>
             </div>
-            <div class="btn-group">
-                <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+
+            <!-- Merge File List -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-title">文件列表</span>
+                    <button class="btn btn-secondary" onclick="scanMergeFiles()">扫描文件</button>
+                </div>
+                <div id="mergeFileListContainer">
+                    <div class="empty-state">点击"扫描文件"加载文件列表</div>
+                </div>
+                <div class="btn-group" id="mergeFileActions" style="display: none;">
+                    <div class="selection-actions">
+                        <button class="btn-link" onclick="selectAllMerge()">全选</button>
+                        <button class="btn-link" onclick="selectNoneMerge()">取消全选</button>
+                        <button class="btn-link" onclick="selectInverseMerge()">反选</button>
+                        <span id="mergeSelectionCount">已选择 0 个文件</span>
+                    </div>
+                    <div style="flex: 1;"></div>
+                </div>
+            </div>
+
+            <!-- Merge Options -->
+            <div class="section" id="mergeOptionsSection" style="display: none;">
+                <div class="section-header">
+                    <span class="section-title">合并选项</span>
+                </div>
+                <div class="merge-options">
+                    <div class="form-group full-width">
+                        <label>合并文件名</label>
+                        <input type="text" id="mergeOutputName" value="merged_output.wav" placeholder="输出文件名">
+                    </div>
+                    <div class="merge-option">
+                        <input type="checkbox" id="mergeDeleteSources">
+                        <label for="mergeDeleteSources">合并完成后删除原文件</label>
+                    </div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-success" onclick="openMergeOrderModal()">调整顺序并合并</button>
+                </div>
+            </div>
+
+            <!-- Merge Progress -->
+            <div class="section" id="mergeProgressSection" style="display: none;">
+                <div class="section-header">
+                    <span class="section-title">合并进度</span>
+                    <span class="elapsed-time" id="mergeElapsedTime"></span>
+                </div>
+                <div class="progress-header">
+                    <span class="progress-text" id="mergeProgressText">准备中...</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="mergeProgressBar" style="width: 0%;"></div>
+                </div>
+                <div class="output-log" id="mergeOutputLog"></div>
             </div>
         </div>
 
-        <!-- File List Section -->
-        <div class="section">
-            <div class="section-header">
-                <span class="section-title">文件列表</span>
-                <button class="btn btn-secondary" onclick="scanFiles()">扫描文件</button>
-            </div>
-            <div id="fileListContainer">
-                <div class="empty-state">点击"扫描文件"加载文件列表</div>
-            </div>
-            <div class="btn-group" id="fileActions" style="display: none;">
-                <div class="selection-actions">
-                    <button class="btn-link" onclick="selectAll()">全选</button>
-                    <button class="btn-link" onclick="selectNone()">取消全选</button>
-                    <button class="btn-link" onclick="selectInverse()">反选</button>
-                    <span id="selectionCount">已选择 0 个文件</span>
+        <!-- Transcribe Tab -->
+        <div id="transcribeTab" class="tab-content">
+            <!-- Transcribe Configuration -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-title">转录配置</span>
                 </div>
-                <div style="flex: 1;"></div>
-                <button class="btn btn-success" onclick="startTask()" id="startBtn">开始处理</button>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>源音频目录</label>
+                        <div class="autocomplete-wrapper">
+                            <input type="text" id="sourceDir" placeholder="/path/to/source">
+                            <div class="autocomplete-dropdown" id="sourceDirAutocomplete"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>歌词目录</label>
+                        <div class="autocomplete-wrapper">
+                            <input type="text" id="lyricDir" placeholder="/path/to/lyrics">
+                            <div class="autocomplete-dropdown" id="lyricDirAutocomplete"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>输出目录</label>
+                        <div class="autocomplete-wrapper">
+                            <input type="text" id="outputDir" placeholder="/path/to/output">
+                            <div class="autocomplete-dropdown" id="outputDirAutocomplete"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>封面图片路径</label>
+                        <div class="autocomplete-wrapper">
+                            <input type="text" id="coverPath" placeholder="/path/to/cover.jpg">
+                            <div class="autocomplete-dropdown" id="coverPathAutocomplete"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>模型</label>
+                        <select id="model"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>语言</label>
+                        <input type="text" id="language" value="zh">
+                    </div>
+                    <div class="form-group">
+                        <label>歌手名</label>
+                        <input type="text" id="singerName" placeholder="Artist Name">
+                    </div>
+                    <div class="form-group">
+                        <label>专辑名</label>
+                        <input type="text" id="albumName" placeholder="Album Name">
+                    </div>
+                    <div class="form-group full-width">
+                        <label>Prompt</label>
+                        <input type="text" id="prompt" value="歌词 简体中文" placeholder="Transcription prompt">
+                    </div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+                </div>
             </div>
-        </div>
 
-        <!-- Progress Section -->
-        <div class="section" id="progressSection">
-            <div class="section-header">
-                <span class="section-title">处理进度</span>
-                <span class="elapsed-time" id="elapsedTime"></span>
-                <button class="btn btn-danger btn-sm" onclick="cancelTask()" id="cancelBtn">取消</button>
+            <!-- Transcribe File List -->
+            <div class="section">
+                <div class="section-header">
+                    <span class="section-title">文件列表</span>
+                    <button class="btn btn-secondary" onclick="scanTranscribeFiles()">扫描文件</button>
+                </div>
+                <div id="transcribeFileListContainer">
+                    <div class="empty-state">点击"扫描文件"加载文件列表</div>
+                </div>
+                <div class="btn-group" id="transcribeFileActions" style="display: none;">
+                    <div class="selection-actions">
+                        <button class="btn-link" onclick="selectAllTranscribe()">全选</button>
+                        <button class="btn-link" onclick="selectNoneTranscribe()">取消全选</button>
+                        <button class="btn-link" onclick="selectInverseTranscribe()">反选</button>
+                        <span id="transcribeSelectionCount">已选择 0 个文件</span>
+                    </div>
+                    <div style="flex: 1;"></div>
+                    <button class="btn btn-success" onclick="startTranscribeTask()"
+                        id="transcribeStartBtn">开始处理</button>
+                </div>
             </div>
-            <div class="progress-header">
-                <span class="progress-text" id="progressText">准备中...</span>
+
+            <!-- Transcribe Progress -->
+            <div class="section" id="transcribeProgressSection" style="display: none;">
+                <div class="section-header">
+                    <span class="section-title">处理进度</span>
+                    <span class="elapsed-time" id="transcribeElapsedTime"></span>
+                    <button class="btn btn-danger btn-sm" onclick="cancelTranscribeTask()"
+                        id="transcribeCancelBtn">取消</button>
+                </div>
+                <div class="progress-header">
+                    <span class="progress-text" id="transcribeProgressText">准备中...</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="transcribeProgressBar" style="width: 0%;"></div>
+                </div>
+                <div class="output-log" id="transcribeOutputLog"></div>
             </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" id="progressBar" style="width: 0%;"></div>
-            </div>
-            <div class="output-log" id="outputLog"></div>
         </div>
     </div>
 
-    <script>
-        let files = [];
-        let eventSource = null;
-        let elapsedTimer = null;
-        let startTime = null;
+    <!-- Merge Order Modal -->
+    <div class="modal" id="mergeOrderModal">
+        <div class="modal-content">
+            <div class="modal-header">调整音频合并顺序</div>
+            <div class="modal-body">
+                <p style="color: #666; margin-bottom: 15px;">拖拽文件以调整合并顺序</p>
+                <div id="mergeOrderList"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('mergeOrderModal')">取消</button>
+                <button class="btn btn-success" onclick="confirmMerge()">确认合并</button>
+            </div>
+        </div>
+    </div>
 
-        // Initialize
-        document.addEventListener('DOMContentLoaded', async () => {
-            await loadModels();
-            await loadConfig();
-            await checkTaskStatus();
-
-            // Initialize autocomplete functionality
-            initializeAutocomplete();
-        });
-
-        // Autocomplete functionality
-        function setupAutocomplete(inputId, dropdownId, pathType = 'directory') {
-            const input = document.getElementById(inputId);
-            const dropdown = document.getElementById(dropdownId);
-            let debounceTimer = null;
-            let currentFocus = -1;
-            let suggestions = [];
-
-            // Debounced search function
-            async function searchPaths(prefix) {
-                try {
-                    const response = await fetch(`/api/paths/search?prefix=${encodeURIComponent(prefix)}&path_type=${pathType}`);
-                    suggestions = await response.json();
-                    renderDropdown();
-                } catch (error) {
-                    console.error('Path search error:', error);
-                    suggestions = [];
-                    renderDropdown();
-                }
-            }
-
-            // Render dropdown with suggestions
-            function renderDropdown() {
-                if (suggestions.length === 0) {
-                    dropdown.innerHTML = '<div class="autocomplete-empty">No matching paths found</div>';
-                    dropdown.classList.remove('active');
-                    return;
-                }
-
-                dropdown.innerHTML = suggestions.map((path, index) =>
-                    `<div class="autocomplete-item" data-index="${index}">${escapeHtml(path)}</div>`
-                ).join('');
-
-                dropdown.classList.add('active');
-                currentFocus = -1;
-
-                // Add click handlers
-                dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
-                    item.addEventListener('click', function () {
-                        selectSuggestion(parseInt(this.dataset.index));
-                    });
-                });
-            }
-
-            // Select a suggestion
-            function selectSuggestion(index) {
-                if (index >= 0 && index < suggestions.length) {
-                    input.value = suggestions[index];
-                    closeDropdown();
-                    input.focus();
-                }
-            }
-
-            // Close dropdown
-            function closeDropdown() {
-                dropdown.classList.remove('active');
-                currentFocus = -1;
-            }
-
-            // Highlight item
-            function setActive(index) {
-                const items = dropdown.querySelectorAll('.autocomplete-item');
-                items.forEach(item => item.classList.remove('highlighted'));
-                if (index >= 0 && index < items.length) {
-                    items[index].classList.add('highlighted');
-                    items[index].scrollIntoView({ block: 'nearest' });
-                }
-            }
-
-            // Input event handler
-            input.addEventListener('input', function () {
-                clearTimeout(debounceTimer);
-                const value = this.value.trim();
-
-                if (value.length === 0) {
-                    closeDropdown();
-                    return;
-                }
-
-                debounceTimer = setTimeout(() => {
-                    searchPaths(value);
-                }, 300);
-            });
-
-            // Keyboard navigation
-            input.addEventListener('keydown', function (e) {
-                const items = dropdown.querySelectorAll('.autocomplete-item');
-
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    currentFocus++;
-                    if (currentFocus >= items.length) currentFocus = 0;
-                    setActive(currentFocus);
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    currentFocus--;
-                    if (currentFocus < 0) currentFocus = items.length - 1;
-                    setActive(currentFocus);
-                } else if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (currentFocus >= 0) {
-                        selectSuggestion(currentFocus);
-                    }
-                } else if (e.key === 'Escape') {
-                    closeDropdown();
-                }
-            });
-
-            // Focus event - show common directories if empty
-            input.addEventListener('focus', function () {
-                if (this.value.trim().length === 0) {
-                    searchPaths('');
-                }
-            });
-
-            // Close dropdown when clicking outside
-            document.addEventListener('click', function (e) {
-                if (e.target !== input && !dropdown.contains(e.target)) {
-                    closeDropdown();
-                }
-            });
-        }
-
-        // Initialize autocomplete for all path inputs
-        function initializeAutocomplete() {
-            setupAutocomplete('sourceDir', 'sourceDirAutocomplete', 'directory');
-            setupAutocomplete('lyricDir', 'lyricDirAutocomplete', 'directory');
-            setupAutocomplete('outputDir', 'outputDirAutocomplete', 'directory');
-            setupAutocomplete('coverPath', 'coverPathAutocomplete', 'file');
-        }
-
-
-        async function loadModels() {
-            const response = await fetch('/api/models');
-            const models = await response.json();
-            const select = document.getElementById('model');
-            select.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
-        }
-
-        async function loadConfig() {
-            const response = await fetch('/api/config');
-            const config = await response.json();
-
-            document.getElementById('sourceDir').value = config.source_dir || '';
-            document.getElementById('lyricDir').value = config.lyric_dir || '';
-            document.getElementById('outputDir').value = config.output_dir || '';
-            document.getElementById('coverPath').value = config.cover_path || '';
-            document.getElementById('model').value = config.model || 'large-v3-turbo';
-            document.getElementById('language').value = config.language || 'zh';
-            document.getElementById('singerName').value = config.singer_name || '';
-            document.getElementById('albumName').value = config.album_name || '';
-            document.getElementById('prompt').value = config.prompt || '歌词 简体中文';
-        }
-
-        async function saveConfig() {
-            const config = {
-                source_dir: document.getElementById('sourceDir').value,
-                lyric_dir: document.getElementById('lyricDir').value,
-                output_dir: document.getElementById('outputDir').value,
-                cover_path: document.getElementById('coverPath').value,
-                model: document.getElementById('model').value,
-                language: document.getElementById('language').value,
-                singer_name: document.getElementById('singerName').value,
-                album_name: document.getElementById('albumName').value,
-                prompt: document.getElementById('prompt').value,
-            };
-
-            const response = await fetch('/api/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config),
-            });
-
-            if (response.ok) {
-                alert('配置已保存');
-            }
-        }
-
-        async function scanFiles() {
-            const response = await fetch('/api/files');
-            files = await response.json();
-            renderFileList();
-        }
-
-        function renderFileList() {
-            const container = document.getElementById('fileListContainer');
-            const actions = document.getElementById('fileActions');
-
-            if (files.length === 0) {
-                container.innerHTML = '<div class="empty-state">没有找到音频文件</div>';
-                actions.style.display = 'none';
-                return;
-            }
-
-            container.innerHTML = `
-                <div class="file-list">
-                    ${files.map((file, index) => `
-                        <div class="file-item">
-                            <input type="checkbox" id="file-${index}" ${file.status !== 'completed' ? 'checked' : ''}>
-                            <span class="file-name">${file.name}</span>
-                            <div class="file-tags">
-                                ${file.has_lyric ? '<span class="tag tag-success">有歌词</span>' : '<span class="tag tag-warning">无歌词</span>'}
-                                ${file.has_output ? '<span class="tag tag-success">有输出</span>' : '<span class="tag tag-warning">无输出</span>'}
-                                ${file.has_lyric && file.has_output ? '<span class="tag-completed">✓</span>' : ''}
-                            </div>
-                        </div>
-                    `).join('')}
+    <!-- File Conflict Modal -->
+    <div class="modal" id="fileConflictModal">
+        <div class="modal-content">
+            <div class="modal-header">文件已存在</div>
+            <div class="modal-body confirm-dialog">
+                <p>文件 <strong id="conflictFileName"></strong> 已存在，请选择操作：</p>
+                <div class="btn-group">
+                    <button class="btn btn-danger" id="overwriteBtn">覆盖</button>
+                    <button class="btn btn-primary" id="renameBtn">重命名</button>
+                    <button class="btn btn-secondary" id="cancelMergeBtn">取消</button>
                 </div>
-            `;
+            </div>
+        </div>
+    </div>
 
-            actions.style.display = 'flex';
-            updateSelectionCount();
+    <!-- Load JavaScript modules -->
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/components/modal.js"></script>
+    <script src="/static/js/components/autocomplete.js"></script>
+    <script src="/static/js/transcribe-tab.js"></script>
+    <script src="/static/js/merge-tab.js"></script>
+    <script src="/static/js/app.js"></script>
 
-            // Add event listeners to checkboxes
-            files.forEach((_, index) => {
-                document.getElementById(`file-${index}`).addEventListener('change', updateSelectionCount);
-            });
-        }
-
-        function getSelectedFiles() {
-            return files.filter((_, index) => {
-                const checkbox = document.getElementById(`file-${index}`);
-                return checkbox && checkbox.checked;
-            }).map(f => f.name);
-        }
-
-        function updateSelectionCount() {
-            const count = getSelectedFiles().length;
-            document.getElementById('selectionCount').textContent = `已选择 ${count} 个文件`;
-        }
-
-        function selectAll() {
-            files.forEach((_, index) => {
-                const checkbox = document.getElementById(`file-${index}`);
-                if (checkbox) checkbox.checked = true;
-            });
-            updateSelectionCount();
-        }
-
-        function selectNone() {
-            files.forEach((_, index) => {
-                const checkbox = document.getElementById(`file-${index}`);
-                if (checkbox) checkbox.checked = false;
-            });
-            updateSelectionCount();
-        }
-
-        function selectInverse() {
-            files.forEach((_, index) => {
-                const checkbox = document.getElementById(`file-${index}`);
-                if (checkbox) checkbox.checked = !checkbox.checked;
-            });
-            updateSelectionCount();
-        }
-
-        async function startTask() {
-            const selectedFiles = getSelectedFiles();
-            if (selectedFiles.length === 0) {
-                alert('请选择要处理的文件');
-                return;
-            }
-
-            // Show progress section and connect SSE BEFORE starting task
-            // This ensures we don't miss the initial progress event
-            showProgressSection();
-
-            // Wait for SSE connection to be established
-            await connectSSE();
-
-            const response = await fetch('/api/task/start', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ files: selectedFiles }),
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                alert(error.detail || '启动任务失败');
-                // Cleanup on failure
-                hideProgressSection();
-                if (eventSource) {
-                    eventSource.close();
-                    eventSource = null;
+    <script>
+        // Show merge options section when files are selected
+        document.addEventListener('DOMContentLoaded', () => {
+            // Watch for selection changes to show/hide merge options
+            const observer = new MutationObserver(() => {
+                const count = getSelectedMergeFiles ? getSelectedMergeFiles().length : 0;
+                const optionsSection = document.getElementById('mergeOptionsSection');
+                if (count > 0) {
+                    optionsSection.style.display = 'block';
+                } else {
+                    optionsSection.style.display = 'none';
                 }
-                return;
-            }
-        }
-
-        async function cancelTask() {
-            await fetch('/api/task/cancel', { method: 'POST' });
-            if (eventSource) {
-                eventSource.close();
-                eventSource = null;
-            }
-        }
-
-        async function checkTaskStatus() {
-            const response = await fetch('/api/task/status');
-            const status = await response.json();
-
-            if (status.running) {
-                showProgressSection(status.start_time);
-
-                // Render recent output
-                const log = document.getElementById('outputLog');
-                log.innerHTML = '';
-                status.recent_output.forEach(event => {
-                    appendLogEvent(event.type, event.data);
-                });
-
-                // Update progress
-                if (status.progress) {
-                    updateProgress(status.progress);
-                }
-
-                // Connect to SSE for live updates
-                connectSSE();
-            }
-        }
-
-        function showProgressSection(serverStartTime = null) {
-            document.getElementById('progressSection').classList.add('active');
-            document.getElementById('startBtn').disabled = true;
-            document.getElementById('cancelBtn').style.display = 'inline-block';
-            document.getElementById('progressText').textContent = '准备中...';
-            document.getElementById('progressBar').style.width = '0%';
-            document.getElementById('outputLog').innerHTML = '';
-
-            // Start elapsed timer - use server time if provided (for refresh recovery)
-            if (serverStartTime) {
-                startTime = serverStartTime * 1000;  // Convert to milliseconds
-            } else {
-                startTime = Date.now();
-            }
-            updateElapsedTime();
-            elapsedTimer = setInterval(updateElapsedTime, 1000);
-        }
-
-        function hideProgressSection() {
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('cancelBtn').style.display = 'none';
-            document.getElementById('progressText').textContent = '已完成';
-            document.getElementById('progressBar').style.width = '100%';
-
-            // Stop elapsed timer
-            if (elapsedTimer) {
-                clearInterval(elapsedTimer);
-                elapsedTimer = null;
-            }
-        }
-
-        function updateElapsedTime() {
-            if (!startTime) return;
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            const minutes = Math.floor(elapsed / 60);
-            const seconds = elapsed % 60;
-            document.getElementById('elapsedTime').textContent = `已耗时: ${minutes} 分 ${seconds.toString().padStart(2, '0')} 秒`;
-        }
-
-        function connectSSE() {
-            return new Promise((resolve) => {
-                if (eventSource) {
-                    eventSource.close();
-                }
-
-                eventSource = new EventSource('/api/task/stream');
-
-                eventSource.addEventListener('progress', (e) => {
-                    const data = JSON.parse(e.data);
-                    updateProgress(data);
-                });
-
-                eventSource.addEventListener('transcribe_line', (e) => {
-                    const data = JSON.parse(e.data);
-                    appendLogEvent('transcribe_line', data);
-                });
-
-                eventSource.addEventListener('transcribe_complete', (e) => {
-                    const data = JSON.parse(e.data);
-                    appendLogEvent('info', { message: `转录完成: ${data.file}` });
-                });
-
-                eventSource.addEventListener('file_complete', (e) => {
-                    const data = JSON.parse(e.data);
-                    if (data.success) {
-                        appendLogEvent('info', { message: `✓ 完成: ${data.file}` });
-                    } else {
-                        appendLogEvent('error', { message: `✗ 失败: ${data.file} - ${data.message}` });
-                    }
-                });
-
-                eventSource.addEventListener('error', (e) => {
-                    if (e.data) {
-                        const data = JSON.parse(e.data);
-                        appendLogEvent('error', data);
-                    }
-                });
-
-                eventSource.addEventListener('task_complete', (e) => {
-                    const data = JSON.parse(e.data);
-                    appendLogEvent('info', { message: `任务完成! 成功: ${data.success_count}, 失败: ${data.fail_count}` });
-                    hideProgressSection();
-                    eventSource.close();
-                    eventSource = null;
-                    scanFiles();
-                });
-
-                eventSource.addEventListener('task_cancelled', () => {
-                    appendLogEvent('info', { message: '任务已取消' });
-                    hideProgressSection();
-                    eventSource.close();
-                    eventSource = null;
-                });
-
-                eventSource.onerror = (e) => {
-                    console.log('SSE connection error', e);
-                    appendLogEvent('info', { message: 'SSE 连接断开，尝试重连...' });
-
-                    // Check if task is still running and reconnect
-                    setTimeout(async () => {
-                        if (eventSource) {
-                            eventSource.close();
-                            eventSource = null;
-                        }
-
-                        const response = await fetch('/api/task/status');
-                        const status = await response.json();
-
-                        if (status.running) {
-                            appendLogEvent('info', { message: '重新连接...' });
-                            connectSSE();
-                        } else {
-                            // Task completed while we were disconnected
-                            appendLogEvent('info', { message: '任务已完成' });
-                            hideProgressSection();
-                            scanFiles();
-                        }
-                    }, 1000);
-                };
-
-                eventSource.onopen = () => {
-                    console.log('SSE connection opened');
-                    resolve();  // Resolve when connection is established
-                };
             });
-        }
-
-        function updateProgress(data) {
-            const progressText = document.getElementById('progressText');
-            const progressBar = document.getElementById('progressBar');
-
-            const phaseText = {
-                'pending': '准备中',
-                'transcribing': '正在转录',
-                'embedding': '正在嵌入',
-                'completed': '已完成',
-                'failed': '失败',
-            };
-
-            const durationText = data.duration ? ` [${data.duration}]` : '';
-            progressText.textContent = `(${data.current}/${data.total}) ${phaseText[data.phase] || data.phase}: ${data.file}${durationText}`;
-            progressBar.style.width = `${(data.current / data.total) * 100}%`;
-        }
-
-        function appendLogEvent(type, data) {
-            const log = document.getElementById('outputLog');
-            const line = document.createElement('div');
-            line.className = 'line';
-
-            if (type === 'transcribe_line') {
-                line.innerHTML = `<span class="time">${data.time}</span> <span class="text">${escapeHtml(data.text)}</span>`;
-            } else if (type === 'error') {
-                line.innerHTML = `<span class="error">${escapeHtml(data.message || data.file)}</span>`;
-            } else if (type === 'info') {
-                line.innerHTML = `<span class="info">${escapeHtml(data.message)}</span>`;
-            }
-
-            log.appendChild(line);
-            log.scrollTop = log.scrollHeight;
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+            // This is a simple implementation - in production you'd want a better approach
+        });
     </script>
 </body>
 

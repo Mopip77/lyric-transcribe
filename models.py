@@ -30,6 +30,10 @@ class Config(BaseModel):
     lyric_dir: str = ""
     output_dir: str = ""
 
+    # Merge configuration
+    merge_source_dir: str = ""
+    merge_output_dir: str = ""
+
     # Transcription configuration
     model: str = "large-v3-turbo"
     language: str = "zh"
@@ -47,6 +51,7 @@ class FileInfo(BaseModel):
     has_lyric: bool
     has_output: bool
     status: FileStatus = FileStatus.PENDING
+    size_bytes: int = 0  # File size in bytes
 
 
 class TaskStartRequest(BaseModel):
