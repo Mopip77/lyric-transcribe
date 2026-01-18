@@ -8,15 +8,15 @@ from mutagen.id3 import ID3, APIC, SYLT, TIT2, TPE1, TALB, Encoding
 from mutagen.mp3 import MP3
 
 
-def parse_lrc(lrc_path: str) -> list[tuple[int, str]]:
+def parse_lrc(lrc_path: str) -> list[tuple[str, int]]:
     """
-    Parse LRC file and return list of (time_ms, text) tuples.
+    Parse LRC file and return list of (text, time_ms) tuples for SYLT.
 
     Args:
         lrc_path: Path to the LRC file
 
     Returns:
-        List of (milliseconds, text) tuples
+        List of (text, milliseconds) tuples (SYLT format)
     """
     lyrics = []
     with open(lrc_path, "r", encoding="utf-8") as f:
@@ -40,7 +40,8 @@ def parse_lrc(lrc_path: str) -> list[tuple[int, str]]:
                     minutes = int(parts[0])
                     seconds = float(parts[1])
                     time_ms = int((minutes * 60 + seconds) * 1000)
-                    lyrics.append((time_ms, text))
+                    # SYLT format: (text, time_ms)
+                    lyrics.append((text, time_ms))
             except (ValueError, IndexError):
                 continue
 

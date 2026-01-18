@@ -48,6 +48,23 @@ def transcribe_audio(
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_wav:
         tmp_wav_path = tmp_wav.name
 
+    # Collect all lines for final LRC file
+    lrc_lines = []
+
+    def on_new_segment(segment):
+        """Callback for real-time segment processing."""
+        start_time = segment.t0 / 100.0  # Convert to seconds
+        text = segment.text.strip()
+
+        if text:
+            timestamp = format_timestamp(start_time)
+            lrc_line = f"{timestamp}{text}"
+            lrc_lines.append(lrc_line)
+
+            # Notify progress in real-time
+            if callback:
+                callback(timestamp, text)
+
     try:
         # Convert to WAV using ffmpeg
         subprocess.run(
@@ -63,31 +80,16 @@ def transcribe_audio(
             capture_output=True,
         )
 
-        # Initialize whisper model
-        whisper = Model(model)
+        # Initialize whisper model with real-time output disabled
+        whisper = Model(model, print_realtime=False, print_progress=False)
 
-        # Transcribe
-        result = whisper.transcribe(
+        # Transcribe with real-time callback
+        whisper.transcribe(
             tmp_wav_path,
             language=language,
             initial_prompt=prompt,
+            new_segment_callback=on_new_segment,
         )
-
-        # Build LRC content
-        lrc_lines = []
-
-        for segment in result:
-            start_time = segment.t0 / 100.0  # Convert to seconds
-            text = segment.text.strip()
-
-            if text:
-                timestamp = format_timestamp(start_time)
-                lrc_line = f"{timestamp}{text}"
-                lrc_lines.append(lrc_line)
-
-                # Notify progress
-                if callback:
-                    callback(timestamp, text)
 
         # Write LRC file
         with open(output_lrc_path, "w", encoding="utf-8") as f:

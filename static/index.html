@@ -301,6 +301,12 @@
         #progressSection.active {
             display: block;
         }
+
+        .elapsed-time {
+            font-size: 14px;
+            color: #666;
+            margin-left: 15px;
+        }
     </style>
 </head>
 <body>
@@ -380,6 +386,7 @@
         <div class="section" id="progressSection">
             <div class="section-header">
                 <span class="section-title">处理进度</span>
+                <span class="elapsed-time" id="elapsedTime"></span>
                 <button class="btn btn-danger btn-sm" onclick="cancelTask()" id="cancelBtn">取消</button>
             </div>
             <div class="progress-header">
@@ -395,6 +402,8 @@
     <script>
         let files = [];
         let eventSource = null;
+        let elapsedTimer = null;
+        let startTime = null;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
@@ -533,6 +542,13 @@
                 return;
             }
 
+            // Show progress section and connect SSE BEFORE starting task
+            // This ensures we don't miss the initial progress event
+            showProgressSection();
+
+            // Wait for SSE connection to be established
+            await connectSSE();
+
             const response = await fetch('/api/task/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -542,11 +558,14 @@
             if (!response.ok) {
                 const error = await response.json();
                 alert(error.detail || '启动任务失败');
+                // Cleanup on failure
+                hideProgressSection();
+                if (eventSource) {
+                    eventSource.close();
+                    eventSource = null;
+                }
                 return;
             }
-
-            showProgressSection();
-            connectSSE();
         }
 
         async function cancelTask() {
@@ -562,7 +581,7 @@
             const status = await response.json();
 
             if (status.running) {
-                showProgressSection();
+                showProgressSection(status.start_time);
 
                 // Render recent output
                 const log = document.getElementById('outputLog');
@@ -581,72 +600,131 @@
             }
         }
 
-        function showProgressSection() {
+        function showProgressSection(serverStartTime = null) {
             document.getElementById('progressSection').classList.add('active');
             document.getElementById('startBtn').disabled = true;
+            document.getElementById('cancelBtn').style.display = 'inline-block';
+            document.getElementById('progressText').textContent = '准备中...';
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('outputLog').innerHTML = '';
+
+            // Start elapsed timer - use server time if provided (for refresh recovery)
+            if (serverStartTime) {
+                startTime = serverStartTime * 1000;  // Convert to milliseconds
+            } else {
+                startTime = Date.now();
+            }
+            updateElapsedTime();
+            elapsedTimer = setInterval(updateElapsedTime, 1000);
         }
 
         function hideProgressSection() {
             document.getElementById('startBtn').disabled = false;
+            document.getElementById('cancelBtn').style.display = 'none';
+            document.getElementById('progressText').textContent = '已完成';
+            document.getElementById('progressBar').style.width = '100%';
+
+            // Stop elapsed timer
+            if (elapsedTimer) {
+                clearInterval(elapsedTimer);
+                elapsedTimer = null;
+            }
+        }
+
+        function updateElapsedTime() {
+            if (!startTime) return;
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('elapsedTime').textContent = `已耗时: ${minutes} 分 ${seconds.toString().padStart(2, '0')} 秒`;
         }
 
         function connectSSE() {
-            if (eventSource) {
-                eventSource.close();
-            }
-
-            eventSource = new EventSource('/api/task/stream');
-
-            eventSource.addEventListener('progress', (e) => {
-                const data = JSON.parse(e.data);
-                updateProgress(data);
-            });
-
-            eventSource.addEventListener('transcribe_line', (e) => {
-                const data = JSON.parse(e.data);
-                appendLogEvent('transcribe_line', data);
-            });
-
-            eventSource.addEventListener('transcribe_complete', (e) => {
-                const data = JSON.parse(e.data);
-                appendLogEvent('info', { message: `转录完成: ${data.file}` });
-            });
-
-            eventSource.addEventListener('file_complete', (e) => {
-                const data = JSON.parse(e.data);
-                if (data.success) {
-                    appendLogEvent('info', { message: `✓ 完成: ${data.file}` });
-                } else {
-                    appendLogEvent('error', { message: `✗ 失败: ${data.file} - ${data.message}` });
+            return new Promise((resolve) => {
+                if (eventSource) {
+                    eventSource.close();
                 }
-            });
 
-            eventSource.addEventListener('error', (e) => {
-                if (e.data) {
+                eventSource = new EventSource('/api/task/stream');
+
+                eventSource.addEventListener('progress', (e) => {
                     const data = JSON.parse(e.data);
-                    appendLogEvent('error', data);
-                }
-            });
+                    updateProgress(data);
+                });
 
-            eventSource.addEventListener('task_complete', (e) => {
-                const data = JSON.parse(e.data);
-                appendLogEvent('info', { message: `任务完成! 成功: ${data.success_count}, 失败: ${data.fail_count}` });
-                hideProgressSection();
-                eventSource.close();
-                eventSource = null;
-                scanFiles();
-            });
+                eventSource.addEventListener('transcribe_line', (e) => {
+                    const data = JSON.parse(e.data);
+                    appendLogEvent('transcribe_line', data);
+                });
 
-            eventSource.addEventListener('task_cancelled', () => {
-                appendLogEvent('info', { message: '任务已取消' });
-                hideProgressSection();
-                eventSource.close();
-                eventSource = null;
-            });
+                eventSource.addEventListener('transcribe_complete', (e) => {
+                    const data = JSON.parse(e.data);
+                    appendLogEvent('info', { message: `转录完成: ${data.file}` });
+                });
 
-            eventSource.onerror = () => {
-                console.log('SSE connection error');
-            };
+                eventSource.addEventListener('file_complete', (e) => {
+                    const data = JSON.parse(e.data);
+                    if (data.success) {
+                        appendLogEvent('info', { message: `✓ 完成: ${data.file}` });
+                    } else {
+                        appendLogEvent('error', { message: `✗ 失败: ${data.file} - ${data.message}` });
+                    }
+                });
+
+                eventSource.addEventListener('error', (e) => {
+                    if (e.data) {
+                        const data = JSON.parse(e.data);
+                        appendLogEvent('error', data);
+                    }
+                });
+
+                eventSource.addEventListener('task_complete', (e) => {
+                    const data = JSON.parse(e.data);
+                    appendLogEvent('info', { message: `任务完成! 成功: ${data.success_count}, 失败: ${data.fail_count}` });
+                    hideProgressSection();
+                    eventSource.close();
+                    eventSource = null;
+                    scanFiles();
+                });
+
+                eventSource.addEventListener('task_cancelled', () => {
+                    appendLogEvent('info', { message: '任务已取消' });
+                    hideProgressSection();
+                    eventSource.close();
+                    eventSource = null;
+                });
+
+                eventSource.onerror = (e) => {
+                    console.log('SSE connection error', e);
+                    appendLogEvent('info', { message: 'SSE 连接断开，尝试重连...' });
+
+                    // Check if task is still running and reconnect
+                    setTimeout(async () => {
+                        if (eventSource) {
+                            eventSource.close();
+                            eventSource = null;
+                        }
+
+                        const response = await fetch('/api/task/status');
+                        const status = await response.json();
+
+                        if (status.running) {
+                            appendLogEvent('info', { message: '重新连接...' });
+                            connectSSE();
+                        } else {
+                            // Task completed while we were disconnected
+                            appendLogEvent('info', { message: '任务已完成' });
+                            hideProgressSection();
+                            scanFiles();
+                        }
+                    }, 1000);
+                };
+
+                eventSource.onopen = () => {
+                    console.log('SSE connection opened');
+                    resolve();  // Resolve when connection is established
+                };
+            });
         }
 
         function updateProgress(data) {
@@ -661,7 +739,8 @@
                 'failed': '失败',
             };
 
-            progressText.textContent = `(${data.current}/${data.total}) ${phaseText[data.phase] || data.phase}: ${data.file}`;
+            const durationText = data.duration ? ` [${data.duration}]` : '';
+            progressText.textContent = `(${data.current}/${data.total}) ${phaseText[data.phase] || data.phase}: ${data.file}${durationText}`;
             progressBar.style.width = `${(data.current / data.total) * 100}%`;
         }
 

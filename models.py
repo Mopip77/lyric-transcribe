@@ -60,6 +60,7 @@ class TaskProgress(BaseModel):
     total: int
     phase: TaskPhase
     file: str
+    duration: str = ""
 
 
 class TranscribeLine(BaseModel):
@@ -86,6 +87,7 @@ class TaskStatus(BaseModel):
     running: bool
     progress: TaskProgress | None = None
     recent_output: list[dict] = []
+    start_time: float | None = None  # Unix timestamp when task started
 
 
 class ErrorEvent(BaseModel):

@@ -1,12 +1,13 @@
 """Task management with SSE support and refresh recovery."""
 
 import asyncio
-import json
+import subprocess
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from queue import Queue as ThreadQueue, Empty as QueueEmpty
+from concurrent.futures import ThreadPoolExecutor
 
 from models import (
     Config,
@@ -17,6 +18,35 @@ from models import (
 )
 from transcriber import transcribe_audio
 from tagger import embed_lyric
+
+
+def get_audio_duration(file_path: str) -> float:
+    """Get audio duration in seconds using ffprobe."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                file_path,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return float(result.stdout.strip())
+    except Exception:
+        return 0.0
+
+
+def format_duration(seconds: float) -> str:
+    """Format duration as mm:ss."""
+    if seconds <= 0:
+        return ""
+    minutes = int(seconds // 60)
+    secs = int(seconds % 60)
+    return f"{minutes:02d}:{secs:02d}"
 
 
 @dataclass
@@ -39,6 +69,8 @@ class Task:
     cancelled: bool = False
     success_count: int = 0
     fail_count: int = 0
+    start_time: float = 0.0  # Unix timestamp when task started
+    current_duration: str = ""  # Duration of current file being processed
 
 
 class TaskManager:
@@ -58,10 +90,11 @@ class TaskManager:
         self._initialized = True
 
         self.current_task: Task | None = None
-        self.output_buffer: deque[dict] = deque(maxlen=100)
+        self.output_buffer: deque[dict] = deque(maxlen=2000)  # Increased for long audio
         self._subscribers: list[asyncio.Queue] = []
         self._lock = asyncio.Lock()
         self._task_runner: asyncio.Task | None = None
+        self._executor = ThreadPoolExecutor(max_workers=1)
 
     async def broadcast(self, event_type: str, data: dict):
         """Broadcast event to all SSE subscribers."""
@@ -82,7 +115,7 @@ class TaskManager:
 
     def subscribe(self) -> asyncio.Queue:
         """Subscribe to SSE events."""
-        queue = asyncio.Queue(maxsize=100)
+        queue = asyncio.Queue(maxsize=2000)  # Increased for long audio
         self._subscribers.append(queue)
         return queue
 
@@ -102,12 +135,14 @@ class TaskManager:
             total=len(task.files),
             phase=task.phase,
             file=task.files[task.current_index].name if task.files else "",
+            duration=task.current_duration,
         )
 
         return TaskStatus(
             running=task.phase not in [TaskPhase.COMPLETED, TaskPhase.FAILED, TaskPhase.CANCELLED],
             progress=progress,
             recent_output=list(self.output_buffer),
+            start_time=task.start_time if task.start_time > 0 else None,
         )
 
     async def start_task(self, files: list[FileTask], config: Config) -> bool:
@@ -143,6 +178,8 @@ class TaskManager:
             return
 
         task.phase = TaskPhase.PENDING
+        task.start_time = time.time()  # Record task start time
+        loop = asyncio.get_running_loop()
 
         for i, file_task in enumerate(task.files):
             if task.cancelled:
@@ -151,11 +188,17 @@ class TaskManager:
             task.current_index = i
             file_task.status = FileStatus.PROCESSING
 
+            # Get audio duration
+            duration = get_audio_duration(file_task.source_path)
+            duration_str = format_duration(duration)
+            task.current_duration = duration_str  # Store for status recovery
+
             await self.broadcast("progress", {
                 "current": i + 1,
                 "total": len(task.files),
                 "phase": "transcribing",
                 "file": file_task.name,
+                "duration": duration_str,
             })
 
             try:
@@ -166,30 +209,57 @@ class TaskManager:
                     # Transcribe
                     task.phase = TaskPhase.TRANSCRIBING
 
-                    def on_transcribe_line(timestamp: str, text: str):
-                        # Queue the broadcast for async execution
-                        asyncio.get_event_loop().call_soon_threadsafe(
-                            lambda: asyncio.create_task(
-                                self.broadcast("transcribe_line", {
-                                    "time": timestamp,
-                                    "text": text,
-                                })
-                            )
-                        )
+                    # Use a thread-safe queue to collect transcribe lines
+                    line_queue: ThreadQueue = ThreadQueue()
+                    transcribe_done = False
+                    transcribe_error = None
 
-                    # Run transcription in thread pool to avoid blocking
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(
-                        None,
-                        lambda: transcribe_audio(
-                            file_task.source_path,
-                            file_task.lyric_path,
-                            model=config.model,
-                            language=config.language,
-                            prompt=config.prompt,
-                            callback=on_transcribe_line,
-                        )
-                    )
+                    def on_transcribe_line(timestamp: str, text: str):
+                        line_queue.put(("line", timestamp, text))
+
+                    # Run transcription in thread pool
+                    def do_transcribe():
+                        nonlocal transcribe_done, transcribe_error
+                        try:
+                            transcribe_audio(
+                                file_task.source_path,
+                                file_task.lyric_path,
+                                model=config.model,
+                                language=config.language,
+                                prompt=config.prompt,
+                                callback=on_transcribe_line,
+                            )
+                            line_queue.put(("done", None, None))
+                        except Exception as e:
+                            line_queue.put(("error", str(e), None))
+
+                    # Submit to executor
+                    loop.run_in_executor(self._executor, do_transcribe)
+
+                    # Process queue until done signal
+                    finished = False
+                    while not finished:
+                        # Process all available items
+                        while True:
+                            try:
+                                item = line_queue.get_nowait()
+                            except QueueEmpty:
+                                # No more items, wait a bit
+                                await asyncio.sleep(0.1)
+                                break
+
+                            msg_type, arg1, arg2 = item
+
+                            if msg_type == "line":
+                                await self.broadcast("transcribe_line", {
+                                    "time": arg1,
+                                    "text": arg2,
+                                })
+                            elif msg_type == "done":
+                                finished = True
+                                break
+                            elif msg_type == "error":
+                                raise RuntimeError(arg1)
 
                     await self.broadcast("transcribe_complete", {
                         "file": file_task.name,
@@ -207,20 +277,21 @@ class TaskManager:
                         "total": len(task.files),
                         "phase": "embedding",
                         "file": file_task.name,
+                        "duration": duration_str,
                     })
 
-                    loop = asyncio.get_event_loop()
-                    await loop.run_in_executor(
-                        None,
-                        lambda: embed_lyric(
-                            file_task.source_path,
-                            file_task.lyric_path,
-                            file_task.output_path,
-                            singer=config.singer_name,
-                            album=config.album_name,
-                            cover_path=config.cover_path,
-                        )
-                    )
+                    # Capture variables for closure
+                    src = file_task.source_path
+                    lrc = file_task.lyric_path
+                    out = file_task.output_path
+                    singer = config.singer_name
+                    album = config.album_name
+                    cover = config.cover_path
+
+                    def do_embed():
+                        return embed_lyric(src, lrc, out, singer, album, cover)
+
+                    await loop.run_in_executor(None, do_embed)
 
                 file_task.status = FileStatus.COMPLETED
                 task.success_count += 1
