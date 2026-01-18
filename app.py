@@ -76,6 +76,80 @@ async def get_models() -> list[str]:
     return get_available_models()
 
 
+@app.get("/api/paths/search")
+async def search_paths(prefix: str = "", path_type: str = "directory") -> list[str]:
+    """
+    Search for paths matching the given prefix.
+    
+    Args:
+        prefix: Path prefix to search for (e.g., "/Us" or "/Users/mcpp/Mus")
+        path_type: Either "directory" or "file" (default: directory)
+    
+    Returns:
+        List of matching absolute paths (max 20 results)
+    """
+    import os
+    from pathlib import Path
+    
+    results = []
+    max_results = 20
+    
+    # Handle empty prefix - return common directories
+    if not prefix or prefix == "/":
+        common_dirs = [
+            Path.home(),
+            Path.home() / "Desktop",
+            Path.home() / "Documents",
+            Path.home() / "Downloads",
+            Path.home() / "Music",
+            Path.home() / "Pictures",
+            Path.home() / "Videos",
+        ]
+        results = [str(d) for d in common_dirs if d.exists() and d.is_dir()]
+        return results[:max_results]
+    
+    try:
+        prefix_path = Path(prefix).expanduser()
+        
+        # If the prefix is an exact directory, return its contents
+        if prefix_path.exists() and prefix_path.is_dir():
+            try:
+                for item in sorted(prefix_path.iterdir()):
+                    if path_type == "directory" and not item.is_dir():
+                        continue
+                    if path_type == "file" and not item.is_file():
+                        continue
+                    results.append(str(item))
+                    if len(results) >= max_results:
+                        break
+            except PermissionError:
+                pass
+        else:
+            # Search for directories matching the prefix
+            parent = prefix_path.parent
+            name_prefix = prefix_path.name
+            
+            if parent.exists() and parent.is_dir():
+                try:
+                    for item in sorted(parent.iterdir()):
+                        if not item.name.startswith(name_prefix):
+                            continue
+                        if path_type == "directory" and not item.is_dir():
+                            continue
+                        if path_type == "file" and not item.is_file():
+                            continue
+                        results.append(str(item))
+                        if len(results) >= max_results:
+                            break
+                except PermissionError:
+                    pass
+    except Exception:
+        # Return empty list on any error
+        pass
+    
+    return results
+
+
 @app.get("/api/files")
 async def get_files() -> list[FileInfo]:
     """Get list of files to process."""

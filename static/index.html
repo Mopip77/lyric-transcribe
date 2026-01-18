@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -35,7 +36,7 @@
             border-radius: 8px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .section-header {
@@ -307,8 +308,66 @@
             color: #666;
             margin-left: 15px;
         }
+
+        .autocomplete-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .autocomplete-wrapper input {
+            width: 100%;
+        }
+
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .autocomplete-dropdown.active {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.2s;
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item:hover,
+        .autocomplete-item.selected {
+            background: #f8f9fa;
+        }
+
+        .autocomplete-item.highlighted {
+            background: #e3f2fd;
+        }
+
+        .autocomplete-empty {
+            padding: 10px 12px;
+            color: #999;
+            font-size: 14px;
+            text-align: center;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>Lyric Transcribe</h1>
@@ -321,19 +380,31 @@
             <div class="form-grid">
                 <div class="form-group">
                     <label>源音频目录</label>
-                    <input type="text" id="sourceDir" placeholder="/path/to/source">
+                    <div class="autocomplete-wrapper">
+                        <input type="text" id="sourceDir" placeholder="/path/to/source">
+                        <div class="autocomplete-dropdown" id="sourceDirAutocomplete"></div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>歌词目录</label>
-                    <input type="text" id="lyricDir" placeholder="/path/to/lyrics">
+                    <div class="autocomplete-wrapper">
+                        <input type="text" id="lyricDir" placeholder="/path/to/lyrics">
+                        <div class="autocomplete-dropdown" id="lyricDirAutocomplete"></div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>输出目录</label>
-                    <input type="text" id="outputDir" placeholder="/path/to/output">
+                    <div class="autocomplete-wrapper">
+                        <input type="text" id="outputDir" placeholder="/path/to/output">
+                        <div class="autocomplete-dropdown" id="outputDirAutocomplete"></div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>封面图片路径</label>
-                    <input type="text" id="coverPath" placeholder="/path/to/cover.jpg">
+                    <div class="autocomplete-wrapper">
+                        <input type="text" id="coverPath" placeholder="/path/to/cover.jpg">
+                        <div class="autocomplete-dropdown" id="coverPathAutocomplete"></div>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>模型</label>
@@ -410,7 +481,142 @@
             await loadModels();
             await loadConfig();
             await checkTaskStatus();
+
+            // Initialize autocomplete functionality
+            initializeAutocomplete();
         });
+
+        // Autocomplete functionality
+        function setupAutocomplete(inputId, dropdownId, pathType = 'directory') {
+            const input = document.getElementById(inputId);
+            const dropdown = document.getElementById(dropdownId);
+            let debounceTimer = null;
+            let currentFocus = -1;
+            let suggestions = [];
+
+            // Debounced search function
+            async function searchPaths(prefix) {
+                try {
+                    const response = await fetch(`/api/paths/search?prefix=${encodeURIComponent(prefix)}&path_type=${pathType}`);
+                    suggestions = await response.json();
+                    renderDropdown();
+                } catch (error) {
+                    console.error('Path search error:', error);
+                    suggestions = [];
+                    renderDropdown();
+                }
+            }
+
+            // Render dropdown with suggestions
+            function renderDropdown() {
+                if (suggestions.length === 0) {
+                    dropdown.innerHTML = '<div class="autocomplete-empty">No matching paths found</div>';
+                    dropdown.classList.remove('active');
+                    return;
+                }
+
+                dropdown.innerHTML = suggestions.map((path, index) =>
+                    `<div class="autocomplete-item" data-index="${index}">${escapeHtml(path)}</div>`
+                ).join('');
+
+                dropdown.classList.add('active');
+                currentFocus = -1;
+
+                // Add click handlers
+                dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+                    item.addEventListener('click', function () {
+                        selectSuggestion(parseInt(this.dataset.index));
+                    });
+                });
+            }
+
+            // Select a suggestion
+            function selectSuggestion(index) {
+                if (index >= 0 && index < suggestions.length) {
+                    input.value = suggestions[index];
+                    closeDropdown();
+                    input.focus();
+                }
+            }
+
+            // Close dropdown
+            function closeDropdown() {
+                dropdown.classList.remove('active');
+                currentFocus = -1;
+            }
+
+            // Highlight item
+            function setActive(index) {
+                const items = dropdown.querySelectorAll('.autocomplete-item');
+                items.forEach(item => item.classList.remove('highlighted'));
+                if (index >= 0 && index < items.length) {
+                    items[index].classList.add('highlighted');
+                    items[index].scrollIntoView({ block: 'nearest' });
+                }
+            }
+
+            // Input event handler
+            input.addEventListener('input', function () {
+                clearTimeout(debounceTimer);
+                const value = this.value.trim();
+
+                if (value.length === 0) {
+                    closeDropdown();
+                    return;
+                }
+
+                debounceTimer = setTimeout(() => {
+                    searchPaths(value);
+                }, 300);
+            });
+
+            // Keyboard navigation
+            input.addEventListener('keydown', function (e) {
+                const items = dropdown.querySelectorAll('.autocomplete-item');
+
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    currentFocus++;
+                    if (currentFocus >= items.length) currentFocus = 0;
+                    setActive(currentFocus);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    currentFocus--;
+                    if (currentFocus < 0) currentFocus = items.length - 1;
+                    setActive(currentFocus);
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (currentFocus >= 0) {
+                        selectSuggestion(currentFocus);
+                    }
+                } else if (e.key === 'Escape') {
+                    closeDropdown();
+                }
+            });
+
+            // Focus event - show common directories if empty
+            input.addEventListener('focus', function () {
+                if (this.value.trim().length === 0) {
+                    searchPaths('');
+                }
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function (e) {
+                if (e.target !== input && !dropdown.contains(e.target)) {
+                    closeDropdown();
+                }
+            });
+        }
+
+        // Initialize autocomplete for all path inputs
+        function initializeAutocomplete() {
+            setupAutocomplete('sourceDir', 'sourceDirAutocomplete', 'directory');
+            setupAutocomplete('lyricDir', 'lyricDirAutocomplete', 'directory');
+            setupAutocomplete('outputDir', 'outputDirAutocomplete', 'directory');
+            setupAutocomplete('coverPath', 'coverPathAutocomplete', 'file');
+        }
+
 
         async function loadModels() {
             const response = await fetch('/api/models');
@@ -768,4 +974,5 @@
         }
     </script>
 </body>
+
 </html>
