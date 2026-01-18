@@ -83,12 +83,20 @@ def transcribe_audio(
         # Initialize whisper model with real-time output disabled
         whisper = Model(model, print_realtime=False, print_progress=False)
 
+        # Set parameters for transcription
+        params = {
+            "no_context": True,
+            "n_max_text_ctx": 0,
+            "n_threads": 8,
+        }
+
         # Transcribe with real-time callback
         whisper.transcribe(
             tmp_wav_path,
             language=language,
             initial_prompt=prompt,
             new_segment_callback=on_new_segment,
+            **params
         )
 
         # Write LRC file
